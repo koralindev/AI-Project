@@ -101,7 +101,7 @@ export default function Home() {
         </div>
       </aside>
       <div className="w-screen h-screen ">
-        <main className="ml-[360px]">
+        <main className="ml-[360px] flex flex-col h-full">
           <header className="flex items-center py-6 px-7 border-b border-[#D0D0D0]/25">
             <button className="bg-[#D0D0D0]/[0.07] p-1.5 border rounded-lg border-[#D0D0D0]/25 cursor-pointer mr-3">
               <Image
@@ -127,7 +127,112 @@ export default function Home() {
               <span className="ml-2">Персонаж</span>
             </button>
           </header>
-          <div className="px-7 py-6"></div>
+          <div className="px-7 py-7 bg-[#181818] flex flex-col gap-6 h-full">
+            <div className="max-w-[70%] flex items-start mb-4 self-start relative">
+              <div className="bg-[#D0D0D0]/[0.07] p-1.5 border rounded-lg border-[#D0D0D0]/25 mr-2.5 absolute">
+                <Image
+                  src="/masterAvatar.svg"
+                  alt="avatar master"
+                  width={24}
+                  height={24}
+                ></Image>
+              </div>
+              <div className="ml-14">
+                <span className="uppercase text-[#6b6b6b] font-bold">
+                  Мастер подземелий
+                </span>
+                <div className="px-4 py-3 text-[#E8E8E8] rounded-lg bg-[#202020] border border-[#FFFFFF]/[0.08] border-l-2 border-l-[#C8C8C8]/45 mt-2">
+                  Тьма давит со всех сторон. Факел Торина бросает дрожащие тени
+                  на стены, покрытые мхом и старыми рунами. Где-то впереди —
+                  скрип, словно что-то тяжёлое волочится по камню.
+                  <br></br>
+                  <br></br> Развилка. Левый коридор уходит вниз — оттуда тянет
+                  холодом и запахом гнили. Правый ведёт к слабому голубоватому
+                  свечению.
+                  <br></br>
+                  <br></br>
+                  Что вы делаете?
+                </div>
+                <div className="mt-2 text-sm text-[#6b6b6b] flex items-center">
+                  <Image
+                    className="relative -top-px"
+                    src="/geo.svg"
+                    alt="geo svg"
+                    width={12}
+                    height={12}
+                  ></Image>
+                  <span className="mx-2">Катакомбы Серого Замка</span>
+                  <span className="mr-2">·</span>
+                  <Image
+                    src="/clock.svg"
+                    alt="time svg"
+                    width={12}
+                    height={12}
+                    className="relative -top-px"
+                  ></Image>
+                  <span className="ml-2">13:08</span>
+                </div>
+              </div>
+            </div>
+            <div className="max-w-[70%] flex items-start self-end flex-row-reverse relative">
+              <div className="bg-[#D0D0D0]/[0.07] p-1.5 border rounded-lg border-[#D0D0D0]/25 mr-2.5 absolute">
+                <Image
+                  src="/alien.svg"
+                  alt="avatar gamer"
+                  width={24}
+                  height={24}
+                ></Image>
+              </div>
+              <div className="mr-17 text-right">
+                <span className="uppercase text-[#6b6b6b] font-bold ">
+                  Аэрин Серебряный
+                </span>
+                <div className="px-4 py-3 text-[#E8E8E8] rounded-lg bg-[#202020] border border-[#FFFFFF]/[0.08] border-r-2 border-r-[#C8C8C8]/45 mt-2 text-left">
+                  Достаю жезл обнаружения магии и провожу ритуал — хочу понять,
+                  откуда исходит то синеватое свечение справа.
+                </div>
+                <div className="mt-2 text-sm text-[#6b6b6b] flex items-center justify-end">
+                  <Image
+                    className="relative -top-px"
+                    src="/geo.svg"
+                    alt="geo svg"
+                    width={12}
+                    height={12}
+                  ></Image>
+                  <span className="mx-2">Катакомбы Серого Замка</span>
+                  <span className="mr-2">·</span>
+                  <Image
+                    src="/clock.svg"
+                    alt="time svg"
+                    width={12}
+                    height={12}
+                    className="relative -top-px"
+                  ></Image>
+                  <span className="ml-2">13:08</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer className="px-7 py-4  mt-auto flex flex-col">
+            <div className="flex">
+              <input
+                placeholder="Опишите свое действие..."
+                className="w-full py-2 px-7 border rounded-lg border-[#FFFFFF]/[0.07] bg-[#202020] text-[#E8E8E8] focus:outline-none"
+              />
+              <button className="bg-[#D0D0D0]/[0.07] p-2 border rounded-lg border-[#D0D0D0]/25 ml-2.5 cursor-pointer">
+                <Image
+                  src="/send.svg"
+                  alt="send message"
+                  width={24}
+                  height={24}
+                  className="relative -top-px"
+                ></Image>
+              </button>
+            </div>
+            <span className="text-sm text-[#6b6b6b] mt-2 self-center">
+              Enter — отправить · Shift+Enter — новая строка
+            </span>
+          </footer>
         </main>
       </div>
     </>
