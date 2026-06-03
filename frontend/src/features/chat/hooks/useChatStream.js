@@ -1,18 +1,50 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { startStream, cancelStream } from '../service'
+import { getHistory, getPending } from '@/api/chatApi'
 
-export function useChatStream(sessionId) {
-  const [messages,    setMessages]    = useState([])
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [statusLabel, setStatusLabel] = useState(null)
-  const [thinkingMs,  setThinkingMs]  = useState(null)
-  const [elapsed,     setElapsed]     = useState(0)
-  const [canResume,   setCanResume]   = useState(false)
+export function useChatStream(sessionId, historyLimit) {
+  const [messages,      setMessages]      = useState([])
+  const [isStreaming,   setIsStreaming]   = useState(false)
+  const [statusLabel,   setStatusLabel]   = useState(null)
+  const [thinkingMs,    setThinkingMs]    = useState(null)
+  const [elapsed,       setElapsed]       = useState(0)
+  const [canResume,     setCanResume]     = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
 
   const requestIdRef   = useRef(null)
   const lastMessageRef = useRef(null)
   const timerRef       = useRef(null)
   const startTimeRef   = useRef(null)
+
+  useEffect(() => {
+    setHistoryLoaded(false)
+    setCanResume(false)
+    Promise.all([
+      getHistory(sessionId, historyLimit),
+      getPending(sessionId).catch(() => null),
+    ])
+      .then(([history, pending]) => {
+        const msgs = history.map(msg => {
+          if (msg.role === 'bot' && msg.text) {
+            try {
+              const parsed = JSON.parse(msg.text)
+              if (parsed && typeof parsed === 'object' && parsed.type) {
+                return { role: 'bot', data: parsed }
+              }
+            } catch { /* plain text */ }
+          }
+          return msg
+        })
+        if (pending) {
+          msgs.push({ role: 'pending', text: pending.player_input })
+          lastMessageRef.current = pending.player_input
+          setCanResume(true)
+        }
+        setMessages(msgs)
+      })
+      .catch(() => setMessages([]))
+      .finally(() => setHistoryLoaded(true))
+  }, [sessionId, historyLimit])
 
   const startTimer = () => {
     startTimeRef.current = Date.now()
@@ -37,10 +69,13 @@ export function useChatStream(sessionId) {
         setThinkingMs(event.elapsed_ms)
         break
       case 'result': {
-        const text = typeof event.response === 'string'
-          ? event.response
-          : JSON.stringify(event.response, null, 2)
-        setMessages(prev => [...prev, { role: 'bot', text }])
+        const response = event.response
+        if (response && typeof response === 'object' && 'type' in response) {
+          setMessages(prev => [...prev, { role: 'bot', data: response }])
+        } else {
+          const text = typeof response === 'string' ? response : JSON.stringify(response, null, 2)
+          setMessages(prev => [...prev, { role: 'bot', text }])
+        }
         break
       }
       case 'cancelled':
@@ -81,6 +116,11 @@ export function useChatStream(sessionId) {
     setCanResume(false)
     setStatusLabel(null)
     setThinkingMs(null)
+
+    if (resume) {
+      setMessages(prev => prev.map(m => m.role === 'pending' ? { ...m, role: 'user' } : m))
+    }
+
     startTimer()
 
     try {
@@ -97,12 +137,13 @@ export function useChatStream(sessionId) {
     }
   }, [sessionId, processStream])
 
-  const send = useCallback(async (text) => {
-    if (!text.trim() || isStreaming) return
+  const send = useCallback(async (text, display) => {
+    if (!text.trim() || isStreaming || !historyLoaded) return
     setCanResume(false)
-    setMessages(prev => [...prev, { role: 'user', text }])
+    const userMsg = { role: 'user', text, ...(display ? { displayText: display } : {}) }
+    setMessages(prev => [...prev.filter(m => m.role !== 'pending'), userMsg])
     await runStream(text, false)
-  }, [isStreaming, runStream])
+  }, [isStreaming, historyLoaded, runStream])
 
   const resume = useCallback(() => {
     if (!lastMessageRef.current || isStreaming) return
@@ -113,5 +154,5 @@ export function useChatStream(sessionId) {
     if (requestIdRef.current) cancelStream(requestIdRef.current)
   }, [])
 
-  return { messages, isStreaming, statusLabel, thinkingMs, elapsed, canResume, send, resume, cancel }
+  return { messages, isStreaming, statusLabel, thinkingMs, elapsed, canResume, historyLoaded, send, resume, cancel }
 }

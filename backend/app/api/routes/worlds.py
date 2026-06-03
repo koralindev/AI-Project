@@ -44,9 +44,19 @@ async def update_world(
     world_uid: str,
     data: dict[str, Any],
     container=Depends(get_container),
-) -> dict:
-    world = await container.world_service().update(world_uid, data)
-    return asdict(world)
+) -> JSONResponse:
+    result = await container.world_service().update(world_uid, data)
+
+    if result.requires_force:
+        return JSONResponse(status_code=200, content={
+            "warning": result.warning,
+            "requires_force": True,
+        })
+
+    if result.map_cells_invalidated:
+        await container.map_cell_service().clear(world_uid)
+
+    return JSONResponse(status_code=200, content=asdict(result.world))
 
 
 @router.delete("/worlds/{world_uid}", status_code=204)
@@ -63,7 +73,13 @@ async def import_world(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
-    results = await container.world_bundle_service().import_bundle(data)
-    has_failures = any(r.failed > 0 for r in results.values())
-    status_code = 207 if has_failures else 200
-    return JSONResponse(status_code=status_code, content={k: v.to_dict() for k, v in results.items()})
+    results, rolled_back = await container.world_bundle_service().import_bundle(data)
+    content = {k: v.to_dict() for k, v in results.items()}
+    if rolled_back:
+        failed_sections = [k for k, v in results.items() if v.failed > 0]
+        content["rolled_back"] = True
+        content["rollback_reason"] = f"failures in: {', '.join(failed_sections)}"
+        status_code = 207
+    else:
+        status_code = 200
+    return JSONResponse(status_code=status_code, content=content)

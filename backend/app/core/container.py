@@ -1,4 +1,4 @@
-from app.core.settings_service import SettingsService
+from app.core.settingsService import SettingsService
 from app.application.llm.clients.qwenClient import QwenClient
 from app.application.llm.clients.openAIClient import OpenAIClient
 from app.application.llm.clients.anthropicClient import AnthropicClient
@@ -11,6 +11,10 @@ from app.db.repositories.iSessionRepository import ISessionRepository
 from app.db.repositories.sqlite.sessionRepository import SqliteSessionRepository
 from app.db.repositories.iMessageRepository import IMessageRepository
 from app.db.repositories.sqlite.messageRepository import SqliteMessageRepository
+from app.db.repositories.iPendingRepository import IPendingRepository
+from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
+from app.db.repositories.iSceneRepository import ISceneRepository
+from app.db.repositories.sqlite.sceneRepository import SqliteSceneRepository
 from app.db.repositories.iPlayerRepository import IPlayerRepository
 from app.db.repositories.sqlite.playerRepository import SqlitePlayerRepository
 from app.db.repositories.iNpcRepository import INpcRepository
@@ -21,10 +25,16 @@ from app.db.repositories.iWorldPerkRepository import IWorldPerkRepository
 from app.db.repositories.sqlite.worldPerkRepository import SqliteWorldPerkRepository
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 from app.db.repositories.sqlite.namedLocationRepository import SqliteNamedLocationRepository
+from app.db.repositories.iMapCellRepository import IMapCellRepository
+from app.db.repositories.sqlite.mapCellRepository import SqliteMapCellRepository
+from app.db.repositories.iStateRepository import IStateRepository
+from app.db.repositories.sqlite.stateRepository import SqliteStateRepository
 from app.application.worldData.worldService import WorldService
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
+from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.stateService import StateService
 from app.application.worldData.seedService import SeedService
 from app.application.worldData.worldBundleService import WorldBundleService
 from app.application.worldData.playerService import PlayerService
@@ -32,6 +42,7 @@ from app.application.worldData.gameSessionService import GameSessionService
 
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
+from app.application.engine.responseResolver import ResponseResolver
 from app.application.engine.graphs.graphCompiler import GraphCompiler
 from app.application.engine.execution.pythonNodeExecutor import PythonNodeExecutor
 from app.application.engine.execution.llmAggregateExecutor import LLMAggregateExecutor
@@ -70,9 +81,13 @@ class Container:
         self._player_repository: IPlayerRepository | None = None
         self._npc_repository: INpcRepository | None = None
         self._message_repository: IMessageRepository | None = None
+        self._pending_repository: IPendingRepository | None = None
+        self._scene_repository: ISceneRepository | None = None
         self._race_repository: IRaceRepository | None = None
         self._perk_repository: IWorldPerkRepository | None = None
         self._location_repository: INamedLocationRepository | None = None
+        self._map_cell_repository: IMapCellRepository | None = None
+        self._state_repository: IStateRepository | None = None
 
         # DOMAIN SERVICES
         self._player_service: PlayerService | None = None
@@ -81,6 +96,8 @@ class Container:
         self._race_service: RaceService | None = None
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
+        self._map_cell_service: MapCellService | None = None
+        self._state_service: StateService | None = None
         self._seed_service: SeedService | None = None
         self._world_bundle_service: WorldBundleService | None = None
 
@@ -119,6 +136,7 @@ class Container:
 
         # ENGINE & SERVICES
         self._llm_engine = None
+        self._response_resolver = None
         self._chat_service = None
         self._settings_service = None
 
@@ -315,6 +333,11 @@ class Container:
     # ENGINE
     # =====================================================
 
+    def response_resolver(self):
+        if self._response_resolver is None:
+            self._response_resolver = ResponseResolver()
+        return self._response_resolver
+
     def llm_engine(self):
         if self._llm_engine is None:
             self._llm_engine = LLMExecutionEngine(
@@ -323,6 +346,16 @@ class Container:
                 patch_applier=self.patch_applier(),
                 executors=self.executors(),
                 snapshot_store=snapshot_store,
+                response_resolver=self.response_resolver(),
+                repositories={
+                    "scene_repo":     self.scene_repository(),
+                    "location_repo":  self.location_repository(),
+                    "player_repo":    self.player_repository(),
+                    "npc_repo":       self.npc_repository(),
+                    "world_repo":     self.world_repository(),
+                    "state_repo":     self.state_repository(),
+                    "map_cell_repo":  self.map_cell_repository(),
+                },
             )
         return self._llm_engine
 
@@ -333,7 +366,9 @@ class Container:
     def chat_service(self):
         if self._chat_service is None:
             self._chat_service = ChatService(
-                llm_engine=self.llm_engine()
+                llm_engine=self.llm_engine(),
+                message_repo=self.message_repository(),
+                pending_repo=self.pending_repository(),
             )
         return self._chat_service
 
@@ -369,6 +404,16 @@ class Container:
             self._location_repository = SqliteNamedLocationRepository(db=self._db)
         return self._location_repository
 
+    def map_cell_repository(self) -> IMapCellRepository:
+        if self._map_cell_repository is None:
+            self._map_cell_repository = SqliteMapCellRepository(db=self._db)
+        return self._map_cell_repository
+
+    def state_repository(self) -> IStateRepository:
+        if self._state_repository is None:
+            self._state_repository = SqliteStateRepository(db=self._db)
+        return self._state_repository
+
     def world_service(self) -> WorldService:
         if self._world_service is None:
             self._world_service = WorldService(repo=self.world_repository())
@@ -389,6 +434,16 @@ class Container:
             self._location_service = NamedLocationService(repo=self.location_repository())
         return self._location_service
 
+    def map_cell_service(self) -> MapCellService:
+        if self._map_cell_service is None:
+            self._map_cell_service = MapCellService(repo=self.map_cell_repository())
+        return self._map_cell_service
+
+    def state_service(self) -> StateService:
+        if self._state_service is None:
+            self._state_service = StateService(repo=self.state_repository())
+        return self._state_service
+
     def seed_service(self) -> SeedService:
         if self._seed_service is None:
             self._seed_service = SeedService(db=self._db)
@@ -397,10 +452,13 @@ class Container:
     def world_bundle_service(self) -> WorldBundleService:
         if self._world_bundle_service is None:
             self._world_bundle_service = WorldBundleService(
+                db=self._db,
                 world_service=self.world_service(),
                 race_service=self.race_service(),
                 perk_service=self.perk_service(),
                 location_service=self.location_service(),
+                map_cell_service=self.map_cell_service(),
+                state_service=self.state_service(),
             )
         return self._world_bundle_service
 
@@ -413,6 +471,16 @@ class Container:
         if self._message_repository is None:
             self._message_repository = SqliteMessageRepository(db=self._db)
         return self._message_repository
+
+    def pending_repository(self) -> IPendingRepository:
+        if self._pending_repository is None:
+            self._pending_repository = SqlitePendingRepository(db=self._db)
+        return self._pending_repository
+
+    def scene_repository(self) -> ISceneRepository:
+        if self._scene_repository is None:
+            self._scene_repository = SqliteSceneRepository(db=self._db)
+        return self._scene_repository
 
     def player_repository(self) -> IPlayerRepository:
         if self._player_repository is None:

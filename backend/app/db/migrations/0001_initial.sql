@@ -60,12 +60,21 @@ CREATE TABLE IF NOT EXISTS worlds (
     -- location registries
     terrain_category_registry   TEXT,
     terrain_registry            TEXT,
+    material_registry           TEXT,
+    cell_state_registry         TEXT,
+    danger_level_registry       TEXT,
     road_type_registry          TEXT,
+    passage_type_registry       TEXT,
     location_type_registry      TEXT,
+    location_state_registry     TEXT,
     climate_zone_registry       TEXT,
-    resource_type_registry      TEXT,
     weather_type_registry       TEXT,
-    connection_type_registry    TEXT,
+    resource_type_registry      TEXT,
+    city_size_registry          TEXT,
+    item_value_tier_registry    TEXT,
+    building_template_registry  TEXT,
+    room_type_registry          TEXT,
+    barrier_template_registry   TEXT,
 
     -- faction registries
     faction_relation_type_registry TEXT,
@@ -73,6 +82,11 @@ CREATE TABLE IF NOT EXISTS worlds (
     -- world map settings
     season_temp_offsets         TEXT,
     default_climate_zone        TEXT,
+    z_max                       INTEGER,
+    z_min                       INTEGER,
+    elevation_lapse_rate        REAL,
+    g                           REAL NOT NULL DEFAULT 1.0,
+    map_cell_size_m             INTEGER NOT NULL DEFAULT 3000,
 
     -- custom fields declarations
     player_fields               TEXT,
@@ -169,14 +183,20 @@ CREATE TABLE IF NOT EXISTS character_sheet (
     system_faction_rank     TEXT,
     display_faction_rank    TEXT,
 
-    -- spawn / respawn (NPC only)
-    home_location_uid       TEXT,
-    work_location_uid       TEXT,
-    spawn_location_uid      TEXT,
+    -- home / spawn / respawn
+    system_home_location_uid    TEXT,
+    system_home_settlement_uid  TEXT,
+    work_location_uid           TEXT,
+    spawn_location_uid          TEXT,
     can_respawn             INTEGER NOT NULL DEFAULT 0,
     respawn_after_ticks     INTEGER,
     system_respawn_place_type TEXT,
     respawn_location_uid    TEXT,
+
+    -- interior position (interior локации)
+    local_level_uid         TEXT REFERENCES location_levels(level_uid),
+    local_x                 INTEGER,
+    local_y                 INTEGER,
 
     -- NPC engine fields
     system_current_needs    TEXT,
@@ -190,12 +210,13 @@ CREATE TABLE IF NOT EXISTS character_sheet (
     world_schema_version    TEXT,
 
     created_at              TEXT NOT NULL,
-    FOREIGN KEY (world_uid)             REFERENCES worlds(world_uid),
-    FOREIGN KEY (system_faction_uid)   REFERENCES factions(faction_uid),
-    FOREIGN KEY (home_location_uid)    REFERENCES named_locations(location_uid),
-    FOREIGN KEY (work_location_uid)    REFERENCES named_locations(location_uid),
-    FOREIGN KEY (spawn_location_uid)   REFERENCES named_locations(location_uid),
-    FOREIGN KEY (respawn_location_uid) REFERENCES named_locations(location_uid)
+    FOREIGN KEY (world_uid)                  REFERENCES worlds(world_uid),
+    FOREIGN KEY (system_faction_uid)        REFERENCES factions(faction_uid),
+    FOREIGN KEY (system_home_location_uid)  REFERENCES named_locations(location_uid),
+    FOREIGN KEY (system_home_settlement_uid) REFERENCES named_locations(location_uid),
+    FOREIGN KEY (work_location_uid)         REFERENCES named_locations(location_uid),
+    FOREIGN KEY (spawn_location_uid)        REFERENCES named_locations(location_uid),
+    FOREIGN KEY (respawn_location_uid)      REFERENCES named_locations(location_uid)
 );
 
 -- ============================================================
@@ -226,16 +247,46 @@ CREATE TABLE IF NOT EXISTS scene_participants (
 );
 
 -- ============================================================
--- messages
+-- turns  (один ход игрока — создаётся только при успехе)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS turns (
+    turn_id      TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL,
+    player_input TEXT NOT NULL,
+    game_tick    INTEGER,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- messages  (LLM-ответы в рамках хода)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS messages (
     message_id   TEXT PRIMARY KEY,
+    turn_id      TEXT NOT NULL,
     session_id   TEXT NOT NULL,
-    player_input TEXT,
+    message_type TEXT NOT NULL DEFAULT 'narrative',
     llm_output   TEXT,
     game_tick    INTEGER,
     created_at   TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES game_sessions(id)
+    FOREIGN KEY (turn_id)    REFERENCES turns(turn_id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- node_execution_logs  (логи нод — только при успехе)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS node_execution_logs (
+    log_id      TEXT PRIMARY KEY,
+    turn_id     TEXT NOT NULL,
+    session_id  TEXT NOT NULL,
+    node_type   TEXT NOT NULL,
+    node_input  TEXT,
+    node_output TEXT,
+    duration_ms INTEGER,
+    created_at  TEXT NOT NULL,
+    FOREIGN KEY (turn_id)    REFERENCES turns(turn_id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -520,6 +571,21 @@ CREATE TABLE IF NOT EXISTS faction_relations (
 );
 
 -- ============================================================
+-- states
+-- ============================================================
+CREATE TABLE IF NOT EXISTS states (
+    state_uid           TEXT PRIMARY KEY,
+    world_uid           TEXT NOT NULL,
+    display_name        TEXT NOT NULL,
+    government_type     TEXT,
+    display_description TEXT,
+    created_at          TEXT NOT NULL,
+    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_states_world ON states (world_uid);
+
+-- ============================================================
 -- named_locations
 -- ============================================================
 CREATE TABLE IF NOT EXISTS named_locations (
@@ -529,21 +595,28 @@ CREATE TABLE IF NOT EXISTS named_locations (
     location_type           TEXT NOT NULL,
     location_subtype        TEXT,
     display_name            TEXT NOT NULL,
-    system_terrain          TEXT,
     system_description      TEXT,
     display_description     TEXT,
     glossary_ref            TEXT,
     tag_refs                TEXT,
     is_discovered           INTEGER NOT NULL DEFAULT 0,
     is_accessible           INTEGER NOT NULL DEFAULT 1,
-    interior_width          INTEGER,
-    interior_height         INTEGER,
     entry_difficulty        INTEGER,
     guard_level             INTEGER,
     system_location_mood    TEXT,
     display_location_mood   TEXT,
     owner_uid               TEXT,
     climate_zone            TEXT,
+    state_uid               TEXT,
+    city_size               TEXT,
+    economic_tier           TEXT,
+    is_public               INTEGER NOT NULL DEFAULT 0,
+    is_forbidden            INTEGER NOT NULL DEFAULT 0,
+    is_selectable           INTEGER NOT NULL DEFAULT 1,
+    map_x                   INTEGER,
+    map_y                   INTEGER,
+    map_z                   INTEGER,
+    is_mobile               INTEGER NOT NULL DEFAULT 0,
     created_at              TEXT NOT NULL,
     FOREIGN KEY (world_uid)            REFERENCES worlds(world_uid),
     FOREIGN KEY (parent_location_uid) REFERENCES named_locations(location_uid),
@@ -557,17 +630,47 @@ CREATE TABLE IF NOT EXISTS map_cells (
     world_uid                TEXT NOT NULL,
     x                       INTEGER NOT NULL,
     y                       INTEGER NOT NULL,
-    elevation               INTEGER NOT NULL DEFAULT 0,
+    z                       INTEGER NOT NULL,
     system_terrain          TEXT NOT NULL,
+    cell_material           TEXT,
+    is_structural           INTEGER NOT NULL DEFAULT 0,
     travel_modifier_override REAL,
     danger_level_override   TEXT,
     gap_width_override      INTEGER,
     temperature_base        INTEGER,
     rainfall                INTEGER,
     location_uid            TEXT,
-    PRIMARY KEY (world_uid, x, y),
+    PRIMARY KEY (world_uid, x, y, z),
     FOREIGN KEY (world_uid)    REFERENCES worlds(world_uid),
     FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid)
+);
+
+-- ============================================================
+-- cell_states (состояния ячеек map_cells)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS cell_states (
+    id            TEXT PRIMARY KEY,
+    world_uid      TEXT NOT NULL,
+    x             INTEGER NOT NULL,
+    y             INTEGER NOT NULL,
+    z             INTEGER NOT NULL,
+    system_state  TEXT NOT NULL,
+    display_state TEXT NOT NULL,
+    started_at    TEXT,
+    ended_at      TEXT,
+    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid)
+);
+
+-- ============================================================
+-- location_levels (этажи / уровни локации)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_levels (
+    level_uid     TEXT PRIMARY KEY,
+    location_uid  TEXT NOT NULL,
+    z             INTEGER NOT NULL,
+    display_name  TEXT NOT NULL,
+    is_accessible INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -578,7 +681,8 @@ CREATE TABLE IF NOT EXISTS location_entry_points (
     location_uid               TEXT NOT NULL,
     x                          INTEGER NOT NULL,
     y                          INTEGER NOT NULL,
-    leads_to_uid               TEXT,
+    z                          INTEGER NOT NULL,
+    leads_to_level_uid         TEXT,
     display_name               TEXT NOT NULL,
     entry_difficulty_override  INTEGER,
     guard_level_override       INTEGER,
@@ -586,8 +690,8 @@ CREATE TABLE IF NOT EXISTS location_entry_points (
     is_accessible              INTEGER NOT NULL DEFAULT 1,
     glossary_ref               TEXT,
     tag_refs                   TEXT,
-    FOREIGN KEY (location_uid)  REFERENCES named_locations(location_uid) ON DELETE CASCADE,
-    FOREIGN KEY (leads_to_uid)  REFERENCES named_locations(location_uid)
+    FOREIGN KEY (location_uid)       REFERENCES named_locations(location_uid) ON DELETE CASCADE,
+    FOREIGN KEY (leads_to_level_uid) REFERENCES location_levels(level_uid)
 );
 
 -- ============================================================
@@ -611,22 +715,25 @@ CREATE TABLE IF NOT EXISTS roads (
 );
 
 -- ============================================================
--- location_connections  (interior logical transitions)
+-- location_passages (переходы между уровнями / комнатами)
 -- ============================================================
-CREATE TABLE IF NOT EXISTS location_connections (
-    connection_uid   TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS location_passages (
+    passage_uid      TEXT PRIMARY KEY,
     world_uid         TEXT NOT NULL,
-    from_location    TEXT NOT NULL,
-    to_location      TEXT NOT NULL,
+    from_level_uid   TEXT NOT NULL,
+    from_x           INTEGER NOT NULL,
+    from_y           INTEGER NOT NULL,
+    to_level_uid     TEXT NOT NULL,
+    to_x             INTEGER NOT NULL,
+    to_y             INTEGER NOT NULL,
     is_bidirectional INTEGER NOT NULL DEFAULT 1,
-    connection_type  TEXT NOT NULL,
-    is_locked        INTEGER NOT NULL DEFAULT 0,
+    passage_type     TEXT NOT NULL,
     display_name     TEXT,
     glossary_ref     TEXT,
     tag_refs         TEXT,
-    FOREIGN KEY (world_uid)      REFERENCES worlds(world_uid),
-    FOREIGN KEY (from_location) REFERENCES named_locations(location_uid),
-    FOREIGN KEY (to_location)   REFERENCES named_locations(location_uid)
+    FOREIGN KEY (world_uid)       REFERENCES worlds(world_uid),
+    FOREIGN KEY (from_level_uid) REFERENCES location_levels(level_uid),
+    FOREIGN KEY (to_level_uid)   REFERENCES location_levels(level_uid)
 );
 
 -- ============================================================
@@ -635,13 +742,15 @@ CREATE TABLE IF NOT EXISTS location_connections (
 CREATE TABLE IF NOT EXISTS location_states (
     id                  TEXT PRIMARY KEY,
     location_uid        TEXT NOT NULL,
+    level_uid           TEXT,
     system_state        TEXT NOT NULL,
     display_state       TEXT NOT NULL,
     system_description  TEXT,
     display_description TEXT,
     need_modifiers      TEXT,
     created_at          TEXT NOT NULL,
-    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE,
+    FOREIGN KEY (level_uid)    REFERENCES location_levels(level_uid)
 );
 
 -- ============================================================
@@ -649,18 +758,24 @@ CREATE TABLE IF NOT EXISTS location_states (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS location_objects (
     object_uid          TEXT PRIMARY KEY,
-    location_uid        TEXT NOT NULL,
+    level_uid           TEXT NOT NULL,
     display_name        TEXT NOT NULL,
     x                   INTEGER NOT NULL,
     y                   INTEGER NOT NULL,
-    z                   INTEGER,
+    placement_type      TEXT NOT NULL,
+    wall_direction      TEXT,
+    height_offset       INTEGER,
+    parent_object_uid   TEXT,
+    display_as_group    INTEGER NOT NULL DEFAULT 0,
     system_description  TEXT,
     display_description TEXT,
     is_interactive      INTEGER NOT NULL DEFAULT 0,
+    is_takeable         INTEGER NOT NULL DEFAULT 1,
     item_uid            TEXT,
     is_accessible       INTEGER NOT NULL DEFAULT 1,
-    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE,
-    FOREIGN KEY (item_uid)     REFERENCES items(item_uid)
+    FOREIGN KEY (level_uid)          REFERENCES location_levels(level_uid) ON DELETE CASCADE,
+    FOREIGN KEY (parent_object_uid)  REFERENCES location_objects(object_uid),
+    FOREIGN KEY (item_uid)           REFERENCES items(item_uid)
 );
 
 -- ============================================================
@@ -678,15 +793,17 @@ CREATE TABLE IF NOT EXISTS location_weather (
 -- location_resources
 -- ============================================================
 CREATE TABLE IF NOT EXISTS location_resources (
-    id             TEXT PRIMARY KEY,
-    location_uid   TEXT NOT NULL,
+    id              TEXT PRIMARY KEY,
+    location_uid    TEXT NOT NULL,
+    level_uid       TEXT,
     system_resource TEXT NOT NULL,
-    quantity       INTEGER NOT NULL DEFAULT 0,
-    max_quantity   INTEGER NOT NULL,
-    regen_override INTEGER,
-    is_discovered  INTEGER NOT NULL DEFAULT 0,
-    is_accessible  INTEGER NOT NULL DEFAULT 1,
-    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE
+    quantity        INTEGER NOT NULL DEFAULT 0,
+    max_quantity    INTEGER NOT NULL,
+    regen_override  INTEGER,
+    is_discovered   INTEGER NOT NULL DEFAULT 0,
+    is_accessible   INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE,
+    FOREIGN KEY (level_uid)    REFERENCES location_levels(level_uid)
 );
 
 -- ============================================================
@@ -893,13 +1010,43 @@ CREATE TABLE IF NOT EXISTS body_hair_density (
 );
 
 -- ============================================================
+-- session_scene  (текущее состояние сцены на сессию)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS session_scene (
+    session_id   TEXT PRIMARY KEY,
+    location_uid TEXT,
+    level_uid    TEXT,
+    description  TEXT NOT NULL,
+    actors       TEXT NOT NULL DEFAULT '[]',
+    updated_at   TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (session_id)   REFERENCES game_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid),
+    FOREIGN KEY (level_uid)    REFERENCES location_levels(level_uid)
+);
+
+-- ============================================================
+-- session_pending  (Outbox pattern: pending input + snapshot)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS session_pending (
+    session_id   TEXT PRIMARY KEY,
+    player_input TEXT NOT NULL,
+    snapshot     TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+);
+
+-- ============================================================
 -- indexes
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_character_sheet_world    ON character_sheet (world_uid);
 CREATE INDEX IF NOT EXISTS idx_character_sheet_location ON character_sheet (system_location);
 CREATE INDEX IF NOT EXISTS idx_character_sheet_type     ON character_sheet (character_type);
 
+CREATE INDEX IF NOT EXISTS idx_turns_session            ON turns    (session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_turn            ON messages (turn_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_session         ON messages (session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_node_logs_turn           ON node_execution_logs (turn_id, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_game_sessions_world      ON game_sessions (world_uid);
 
@@ -925,14 +1072,26 @@ CREATE INDEX IF NOT EXISTS idx_factions_world           ON factions (world_uid);
 CREATE INDEX IF NOT EXISTS idx_named_locations_world    ON named_locations (world_uid);
 CREATE INDEX IF NOT EXISTS idx_named_locations_parent   ON named_locations (parent_location_uid);
 CREATE INDEX IF NOT EXISTS idx_named_locations_type     ON named_locations (world_uid, location_type);
+CREATE INDEX IF NOT EXISTS idx_named_locations_public   ON named_locations (world_uid, is_public);
 
-CREATE INDEX IF NOT EXISTS idx_map_cells_location       ON map_cells (location_uid);
+CREATE INDEX IF NOT EXISTS idx_map_cells_location_z     ON map_cells (world_uid, location_uid, z);
+
+CREATE INDEX IF NOT EXISTS idx_location_levels_location ON location_levels (location_uid);
+CREATE INDEX IF NOT EXISTS idx_location_passages_from   ON location_passages (from_level_uid);
+CREATE INDEX IF NOT EXISTS idx_location_passages_to     ON location_passages (to_level_uid);
+
+CREATE INDEX IF NOT EXISTS idx_map_cells_location       ON map_cells (world_uid, location_uid, z);
+CREATE INDEX IF NOT EXISTS idx_map_cells_xy             ON map_cells (world_uid, x, y);
+
+CREATE INDEX IF NOT EXISTS idx_cell_states_cell         ON cell_states (world_uid, x, y, z);
+CREATE INDEX IF NOT EXISTS idx_cell_states_active       ON cell_states (world_uid, x, y, z) WHERE ended_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_roads_world              ON roads (world_uid);
 CREATE INDEX IF NOT EXISTS idx_roads_from               ON roads (from_location);
 CREATE INDEX IF NOT EXISTS idx_roads_to                 ON roads (to_location);
 
 CREATE INDEX IF NOT EXISTS idx_location_states_loc      ON location_states (location_uid);
+CREATE INDEX IF NOT EXISTS idx_location_objects_level   ON location_objects (level_uid);
 CREATE INDEX IF NOT EXISTS idx_location_resources_loc   ON location_resources (location_uid);
 CREATE INDEX IF NOT EXISTS idx_location_faction_inf_loc ON location_faction_influence (location_uid);
 

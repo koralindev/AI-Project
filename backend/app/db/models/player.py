@@ -5,15 +5,13 @@ from app.db.mapper import bool_col, json_col
 
 @dataclass
 class Player:
-    __table__          = "character_sheet"
-    __pk__             = "character_uid"
-    __discriminator__  = {"character_type": "player"}
-    __update_exclude__ = frozenset({"world_uid"})
+    __table__         = "character_sheet"
+    __pk__            = "character_uid"
+    __discriminator__ = {"character_type": "player"}
 
-    character_uid:          str
-    world_uid:               str
-    display_name:           str
-    created_at:             str
+    character_uid: str
+    display_name:  str
+    created_at:    str
 
     # identification
     system_class:           str | None = None
@@ -34,8 +32,13 @@ class Player:
     display_title:          str | None = None
 
     # location
-    system_location:        str | None = None
-    display_location:       str | None = None
+    system_home_location_uid:   str | None = None
+    system_home_settlement_uid: str | None = None
+    system_location:            str | None = None
+    display_location:           str | None = None
+
+    # faction
+    system_faction_uid:         str | None = None
 
     # money
     system_money:           dict = json_col(default_factory=dict)
