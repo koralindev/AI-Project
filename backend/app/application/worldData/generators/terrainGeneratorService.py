@@ -32,7 +32,7 @@ _CLIMATE_BASE_TEMP: dict[str, int] = {
 }
 
 
-def _z_to_terrain(z: int, terrain_registry: dict) -> str:
+def _z_to_terrain(z: int, terrain_set: set[str]) -> str:
     if z >= 2:
         candidates = ["tundra", "plains"]
     elif z == 1:
@@ -40,11 +40,11 @@ def _z_to_terrain(z: int, terrain_registry: dict) -> str:
     elif z == 0:
         candidates = ["plains"]
     else:
-        candidates = ["water", "plains"]
+        candidates = ["liquid_body", "plains"]
     for t in candidates:
-        if t in terrain_registry:
+        if t in terrain_set:
             return t
-    return next(iter(terrain_registry), "plains")
+    return next(iter(terrain_set), "plains")
 
 
 def _cell_z_noise(world_seed: int, x: int, y: int, base_z: int, amplitude: int = 1) -> int:
@@ -85,9 +85,10 @@ class TerrainGeneratorService:
         if not locations:
             return []
 
-        world_seed  = int(hashlib.md5(world.world_uid.encode()).hexdigest()[:8], 16)
-        terrain_reg = world.terrain_registry or {}
-        lapse_rate  = world.elevation_lapse_rate or 7.0
+        world_seed   = int(hashlib.md5(world.world_uid.encode()).hexdigest()[:8], 16)
+        terrain_reg  = world.terrain_registry or []
+        terrain_set  = {t["system_terrain"] for t in terrain_reg if "system_terrain" in t}
+        lapse_rate   = world.elevation_lapse_rate or 7.0
         z_min       = world.z_min if world.z_min is not None else -3
         z_max       = world.z_max if world.z_max is not None else 4
 
@@ -103,7 +104,7 @@ class TerrainGeneratorService:
             return []
 
         # City anchors list + center lookup for Voronoi
-        city_list = [l for l in anchors if l.location_type in _CITY_TYPES]
+        city_list = [l for l in anchors if l.system_location_type in _CITY_TYPES]
         city_centers: dict[tuple[int, int], NamedLocation] = {
             (l.map_x, l.map_y): l for l in city_list
         }
@@ -154,7 +155,7 @@ class TerrainGeneratorService:
                 if pos in city_footprint:
                     city    = city_footprint[pos]
                     z       = city.map_z
-                    terrain = "urban" if "urban" in terrain_reg else _z_to_terrain(0, terrain_reg)
+                    terrain = "urban" if "urban" in terrain_set else _z_to_terrain(0, terrain_set)
                     loc_uid = city.location_uid
                     climate = self._city_climate(city, city_zones, world)
                 elif pos in all_footprints:
@@ -168,7 +169,7 @@ class TerrainGeneratorService:
                     base_z  = _CLIMATE_TO_Z.get(climate, 0)
                     raw_z   = _cell_z_noise(world_seed, x, y, base_z)
                     z       = max(z_min, min(z_max, raw_z))
-                    terrain = _z_to_terrain(z, terrain_reg)
+                    terrain = _z_to_terrain(z, terrain_set)
                     zone    = city_zones.get(nearest.location_uid) if nearest else None
                     loc_uid = zone.location_uid if zone else (nearest.location_uid if nearest else None)
 
@@ -186,7 +187,7 @@ class TerrainGeneratorService:
         # Additional anchor cells for non-surface locations (mines, underground cities, etc.)
         # These are at different z than surface, so added without overwriting surface cells
         for anchor in anchors:
-            if anchor.location_type in _CITY_TYPES:
+            if anchor.system_location_type in _CITY_TYPES:
                 continue  # already handled above
             climate   = self._resolve_climate(anchor, uid_map, world)
             base_temp = _CLIMATE_BASE_TEMP.get(climate, 5)
@@ -195,7 +196,7 @@ class TerrainGeneratorService:
                 x=anchor.map_x,
                 y=anchor.map_y,
                 z=anchor.map_z,
-                system_terrain=_z_to_terrain(anchor.map_z, terrain_reg),
+                system_terrain=_z_to_terrain(anchor.map_z, terrain_set),
                 temperature_base=round(base_temp - anchor.map_z * lapse_rate),
                 location_uid=anchor.location_uid,
             ))
@@ -207,16 +208,17 @@ class TerrainGeneratorService:
         Broken location repair: create a single anchor cell for a location
         that has no map_cells. Used in engine nodes during active sessions.
         """
-        terrain_reg = world.terrain_registry or {}
+        terrain_reg = world.terrain_registry or []
+        terrain_set = {t["system_terrain"] for t in terrain_reg if "system_terrain" in t}
         lapse_rate  = world.elevation_lapse_rate or 7.0
 
         x = location.map_x if location.map_x is not None else 0
         y = location.map_y if location.map_y is not None else 0
         z = location.map_z if location.map_z is not None else 0
 
-        terrain   = "urban" if location.location_type in _CITY_TYPES and "urban" in terrain_reg \
-                    else _z_to_terrain(z, terrain_reg)
-        base_temp = _CLIMATE_BASE_TEMP.get(location.climate_zone or "temperate", 5)
+        terrain   = "urban" if location.system_location_type in _CITY_TYPES and "urban" in terrain_set \
+                    else _z_to_terrain(z, terrain_set)
+        base_temp = _CLIMATE_BASE_TEMP.get(location.system_climate_zone or "temperate", 5)
 
         return [MapCell(
             world_uid=world.world_uid,
@@ -230,10 +232,13 @@ class TerrainGeneratorService:
 
     def _get_city_radius(self, city: NamedLocation, world: World) -> int:
         """Look up footprint radius from city_size_registry. Defaults to 0 (single cell)."""
-        if not city.city_size:
+        if not city.system_city_size:
             return 0
-        registry = world.city_size_registry or {}
-        return registry.get(city.city_size, {}).get("radius", 0)
+        registry = world.city_size_registry or []
+        for entry in registry:
+            if entry.get("system_size") == city.system_city_size:
+                return entry.get("radius", 0)
+        return 0
 
     def _find_zone(
         self,
@@ -242,7 +247,7 @@ class TerrainGeneratorService:
     ) -> Optional[NamedLocation]:
         current = uid_map.get(location.parent_location_uid)
         while current:
-            if current.location_type in _ZONE_TYPES:
+            if current.system_location_type in _ZONE_TYPES:
                 return current
             current = uid_map.get(current.parent_location_uid)
         return None
@@ -255,8 +260,8 @@ class TerrainGeneratorService:
     ) -> str:
         current: Optional[NamedLocation] = location
         while current:
-            if current.climate_zone:
-                return current.climate_zone
+            if current.system_climate_zone:
+                return current.system_climate_zone
             current = uid_map.get(current.parent_location_uid)
         return world.default_climate_zone or "temperate"
 
@@ -269,10 +274,10 @@ class TerrainGeneratorService:
         if city is None:
             return world.default_climate_zone or "temperate"
         zone = city_zones.get(city.location_uid)
-        if zone and zone.climate_zone:
-            return zone.climate_zone
-        if city.climate_zone:
-            return city.climate_zone
+        if zone and zone.system_climate_zone:
+            return zone.system_climate_zone
+        if city.system_climate_zone:
+            return city.system_climate_zone
         return world.default_climate_zone or "temperate"
 
     def _nearest_city(

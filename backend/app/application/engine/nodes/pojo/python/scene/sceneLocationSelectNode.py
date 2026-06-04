@@ -45,7 +45,7 @@ def _resolve_type_display(location_type: str, registry: dict) -> str | None:
     entry = registry.get(location_type)
     if not entry:
         return None
-    return entry.get("display") if isinstance(entry, dict) else str(entry)
+    return entry.get("display_name") if isinstance(entry, dict) else str(entry)
 
 
 def can_start(location, player_uid, player_faction_uid, faction_access_list, npc_home_occupied_uids):
@@ -156,13 +156,13 @@ class SceneLocationChildrenNode(PythonNode):
         return NodeResult(data={
             "location_uid":         location.location_uid,
             "location_name":        location.display_name,
-            "location_description": location.display_description or location.system_description or "",
+            "location_description": location.display_description or "",
             "is_accessible":        location.is_accessible,
             "children": [
                 {
                     "uid":          c.location_uid,
                     "name":         c.display_name,
-                    "type_display": _resolve_type_display(c.location_type, type_registry),
+                    "type_display": _resolve_type_display(c.system_location_type, type_registry),
                     "state_name":   states_map.get(c.state_uid) if c.state_uid else None,
                 }
                 for c in available
