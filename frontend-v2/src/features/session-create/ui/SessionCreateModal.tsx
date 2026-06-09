@@ -1,44 +1,56 @@
 "use client";
 
-import { ModalSelectImport } from "@/src/widgets/session-create/ui/ModalSelectImport";
+import { ModalSelectImport } from "@/src/features/session-create/ui/ModalSelectImport";
 import Image from "next/image";
-import { SelectWorld } from "./SelectWorld";
+import { SelectWorld } from "./WorldCard";
 import { useState } from "react";
 import { ModalHeader } from "./ModalHeader";
-import { SelectCharacter } from "./SelectCharacter";
+import { SelectCharacter } from "./CharacterCard";
+import { useRouter } from "next/navigation";
+import { createSession } from "../api/createSession";
 
 const worlds = [
   {
+    uid: "2",
     name: "Катакомбы Серого Замка",
   },
   {
+    uid: "23",
     name: "Лесной храм",
   },
   {
+    uid: "24",
     name: "Заброшенная шахта",
   },
   {
+    uid: "1",
     name: "Заброшенная шахта",
   },
   {
+    uid: "5",
     name: "Заброшенная шахта",
   },
   {
+    uid: "123",
     name: "Заброшенная шахта",
   },
   {
+    uid: "12",
     name: "Заброшенная шахта",
   },
   {
+    uid: "244",
     name: "Заброшенная шахта",
   },
   {
+    uid: "42",
     name: "Заброшенная шахта",
   },
 ];
 
 const characters = [
   {
+    uid: "1",
     name: "Аэрин Серебрянный",
     race: "Эльф",
     class: "Маг",
@@ -48,6 +60,7 @@ const characters = [
     avatar: "/alien.svg",
   },
   {
+    uid: "2",
     name: "Торин Камнезуб",
     race: "Дворф",
     class: "Воин",
@@ -59,9 +72,27 @@ const characters = [
 ];
 
 export const SessionCreateModal = () => {
-  const [step, setStep] = useState<"" | "world" | "character">("");
+  const router = useRouter();
 
-  const isEmpty = step === "";
+  const [step, setStep] = useState<"world" | "character">("world");
+  const [selectedWorldId, setSelectedWorldId] = useState<string | null>(null);
+
+  const handleWorldSelect = (worldId: string) => {
+    setSelectedWorldId(worldId);
+    setStep("character");
+  };
+
+  const handleCharacterSelect = async (characterId: string) => {
+    if (!selectedWorldId) return;
+
+    const session = await createSession({
+      worldId: selectedWorldId,
+      characterId,
+    });
+
+    router.replace(`/sessions/${session.id}`);
+  };
+
   const isWorld = step === "world";
 
   return (
@@ -73,7 +104,7 @@ export const SessionCreateModal = () => {
           </div>
           <button
             className="text-gray-400 hover:border-[#D0D0D0]/60"
-            // onClick={() => selectStep("")}
+            onClick={() => router.back()}
           >
             <Image src="/close.svg" alt="close modal" width={22} height={22} />
           </button>
@@ -81,20 +112,20 @@ export const SessionCreateModal = () => {
         <div className="flex-1 overflow-y-auto p-6 scrollbar scrollbar-thin scrollbar-thumb-[#9F9F9F] scrollbar-track-[#2C2C2C]">
           <ul className="grid grid-cols-2 gap-4">
             <ModalSelectImport step={step} />
-            {isEmpty &&
-              worlds.map((selectItem, index) => (
+            {isWorld &&
+              worlds.map((world) => (
                 <SelectWorld
-                  key={index}
-                  selectItem={selectItem}
-                  setStep={setStep}
+                  key={world.uid}
+                  selectItem={world}
+                  onSelect={() => handleWorldSelect(world.uid)}
                 />
               ))}
-            {isWorld &&
-              characters.map((selectItem, index) => (
+            {!isWorld &&
+              characters.map((character) => (
                 <SelectCharacter
-                  key={index}
-                  selectItem={selectItem}
-                  setStep={setStep}
+                  key={character.uid}
+                  selectItem={character}
+                  onSelect={() => handleCharacterSelect(character.uid)}
                 />
               ))}
           </ul>

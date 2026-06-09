@@ -1,5 +1,5 @@
 "use client";
-
+import Link from "next/link";
 import Image from "next/image";
 import { CampaignListItem } from "./CampaignListItem";
 
@@ -12,7 +12,10 @@ export const AppSidebar = () => {
         </div>
         <h1 className="font-display text-3xl font-bold">RPG Engine</h1>
       </div>
-      <button className="flex justify-center font-bold items-center border-2 rounded-lg border-[#D0D0D0]/22 py-2 px-6 cursor-pointer">
+      <Link
+        href="/sessions/new"
+        className="flex justify-center font-bold items-center border-2 rounded-lg border-[#D0D0D0]/22 py-2 px-6 cursor-pointer"
+      >
         <Image
           src="/plus.svg"
           alt="add session"
@@ -21,7 +24,7 @@ export const AppSidebar = () => {
           className="mr-2"
         ></Image>
         Новая сессия
-      </button>
+      </Link>
       <nav className="mt-5">
         <span className="text-sm text-[#9b9b9b] tracking-[1.8px]">
           КАМПАНИИ

@@ -2,6 +2,7 @@ import Image from "next/image";
 
 type SelectCharacterProps = {
   selectItem: {
+    uid: string;
     name: string;
     race: string;
     class: string;
@@ -10,17 +11,17 @@ type SelectCharacterProps = {
     kd: number;
     avatar: string;
   };
-  setStep: (step: "world" | "character" | "") => void;
+  onSelect: () => void;
 };
 
 export const SelectCharacter = ({
   selectItem,
-  setStep,
+  onSelect,
 }: SelectCharacterProps) => {
   return (
     <li
       className="flex cursor-pointer hover:border-[#D0D0D0]/60 flex-col border border-[#D0D0D0]/25 rounded-md p-4 relative"
-      onClick={() => setStep("character")}
+      onClick={onSelect}
     >
       <div className="absolute top-3 right-3 flex gap-1 ">
         <button className="p-1 rounded-md bg-[#D0D0D0]/[0.05] cursor-pointer">
