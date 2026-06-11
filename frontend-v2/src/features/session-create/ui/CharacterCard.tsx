@@ -1,16 +1,7 @@
 import Image from "next/image";
 
 type SelectCharacterProps = {
-  selectItem: {
-    uid: string;
-    name: string;
-    race: string;
-    class: string;
-    lvl: number;
-    hp: string;
-    kd: number;
-    avatar: string;
-  };
+  selectItem: Character;
   onSelect: () => void;
 };
 
@@ -44,8 +35,8 @@ export const SelectCharacter = ({
       <div className="flex">
         <div className="bg-[#D0D0D0]/[0.07] p-1.5 border rounded-lg border-[#D0D0D0]/25 ">
           <Image
-            src={selectItem.avatar}
-            alt={`avatar character: ${selectItem.avatar}`}
+            src="/alien.svg"
+            alt={`avatar character: ${selectItem.name}`}
             width={32}
             height={32}
           ></Image>
@@ -53,13 +44,13 @@ export const SelectCharacter = ({
         <div className="flex flex-col ml-4">
           <span className="text-lg font-semibold ">{selectItem.name}</span>
           <span className="text-xs text-[#6b6b6b] ">
-            {selectItem.race} · {selectItem.class} {selectItem.lvl} ур.
+            {selectItem.race} · {selectItem.class} 10ур.
           </span>
         </div>
       </div>
       <div className="flex text-xs mt-3">
-        <span className="text-[#942727]">HP {selectItem.hp}</span>
-        <span className="text-[#125074] ml-5">КД {selectItem.kd}</span>
+        <span className="text-[#942727]">HP 43/45</span>
+        <span className="text-[#125074] ml-5">КД 12</span>
       </div>
     </li>
   );

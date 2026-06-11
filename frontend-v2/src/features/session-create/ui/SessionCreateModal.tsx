@@ -9,69 +9,15 @@ import { SelectCharacter } from "./CharacterCard";
 import { useRouter } from "next/navigation";
 import { createSession } from "../api/createSession";
 
-const worlds = [
-  {
-    uid: "2",
-    name: "Катакомбы Серого Замка",
-  },
-  {
-    uid: "23",
-    name: "Лесной храм",
-  },
-  {
-    uid: "24",
-    name: "Заброшенная шахта",
-  },
-  {
-    uid: "1",
-    name: "Заброшенная шахта",
-  },
-  {
-    uid: "5",
-    name: "Заброшенная шахта",
-  },
-  {
-    uid: "123",
-    name: "Заброшенная шахта",
-  },
-  {
-    uid: "12",
-    name: "Заброшенная шахта",
-  },
-  {
-    uid: "244",
-    name: "Заброшенная шахта",
-  },
-  {
-    uid: "42",
-    name: "Заброшенная шахта",
-  },
-];
+type SessionCreateModalProps = {
+  characters: Character[];
+  worlds: World[];
+};
 
-const characters = [
-  {
-    uid: "1",
-    name: "Аэрин Серебрянный",
-    race: "Эльф",
-    class: "Маг",
-    lvl: 7,
-    hp: "42/69",
-    kd: 13,
-    avatar: "/alien.svg",
-  },
-  {
-    uid: "2",
-    name: "Торин Камнезуб",
-    race: "Дворф",
-    class: "Воин",
-    lvl: 6,
-    hp: "69/72",
-    kd: 18,
-    avatar: "/alien.svg",
-  },
-];
-
-export const SessionCreateModal = () => {
+export const SessionCreateModal = ({
+  characters,
+  worlds,
+}: SessionCreateModalProps) => {
   const router = useRouter();
 
   const [step, setStep] = useState<"world" | "character">("world");

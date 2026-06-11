@@ -1,5 +1,5 @@
-import { SessionCreateModal } from "@/src/features/session-create/ui/SessionCreateModal";
+import { CreateSessionWrap } from "@/src/features/session-create/ui/CreateSessionWrap";
 
 export default function NewSessionPage() {
-  return <SessionCreateModal />;
+  return <CreateSessionWrap />;
 }

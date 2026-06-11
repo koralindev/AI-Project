@@ -1,10 +1,7 @@
 import Image from "next/image";
 
 type SelectWorldProps = {
-  selectItem: {
-    uid: string;
-    name: string;
-  };
+  selectItem: World;
   onSelect: () => void;
 };
 
